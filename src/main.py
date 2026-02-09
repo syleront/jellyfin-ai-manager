@@ -79,11 +79,11 @@ def main():
     setup_logging(config.log_level)
     logger = logging.getLogger("main")
 
-    if not all([config.openrouter_api_key, config.tmdb_api_key, config.mixed_path, config.movies_dest_path, config.series_dest_path]):
+    if not all([config.llm_api_key, config.tmdb_api_key, config.mixed_path, config.movies_dest_path, config.series_dest_path]):
         logger.error("Required configuration is missing in .env file!")
         return
 
-    llm = LLMClient(config.openrouter_api_key, config.openrouter_model, config.openrouter_base_url)
+    llm = LLMClient(config.llm_api_key, config.llm_model, config.llm_base_url)
     tmdb = TMDBClient(config.tmdb_api_key)
     jellyfin = JellyfinClient(config.jellyfin_url, config.jellyfin_api_key)
     processor = MediaProcessor(config, tmdb)

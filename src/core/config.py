@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    openrouter_api_key: str
-    openrouter_model: str
-    openrouter_base_url: str
+    llm_api_key: str
+    llm_model: str
+    llm_base_url: str
     tmdb_api_key: str
     
     # Paths
@@ -26,9 +26,9 @@ def load_config() -> Config:
     load_dotenv()
     
     return Config(
-        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
-        openrouter_model=os.getenv("OPENROUTER_MODEL", "perplexity/llama-3.1-sonar-small-128k-online"),
-        openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        llm_api_key=os.getenv("LLM_API_KEY", os.getenv("OPENROUTER_API_KEY", "")),
+        llm_model=os.getenv("LLM_MODEL", os.getenv("OPENROUTER_MODEL", "perplexity/llama-3.1-sonar-small-128k-online")),
+        llm_base_url=os.getenv("LLM_BASE_URL", os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")),
         tmdb_api_key=os.getenv("TMDB_API_KEY", ""),
         
         mixed_path=os.getenv("MIXED_PATH", ""),

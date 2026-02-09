@@ -29,7 +29,7 @@ Automates media organization by scanning a "mixed" folder, identifying content u
    cp .env.example .env
    ```
 3. Configure your paths in `.env`:
-   - `OPENROUTER_API_KEY`: Your OpenRouter API key.
+   - `LLM_API_KEY`: Your OpenAI-compatible API key (OpenRouter, Perplexity, etc.).
    - `TMDB_API_KEY`: Your TMDB API key.
    - `MIXED_PATH`: Path inside the container where mixed media is located.
    - `MOVIES_DEST_PATH`: Path inside the container for organized movies.

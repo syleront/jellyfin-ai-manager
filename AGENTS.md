@@ -65,8 +65,8 @@ This file defines the rules and conventions for AI agents and developers working
   - Use the provided `Dockerfile` (Python 3.11-slim).
   - Use `docker-compose.yml` for orchestration.
 - **Environment Variables**:
-  - Required: `OPENROUTER_API_KEY`, `TMDB_API_KEY`, `MIXED_PATH`, `MOVIES_DEST_PATH`, `SERIES_DEST_PATH`.
-  - Optional: `JELLYFIN_URL`, `JELLYFIN_API_KEY`, `LOG_LEVEL`.
+  - Required: `LLM_API_KEY`, `TMDB_API_KEY`, `MIXED_PATH`, `MOVIES_DEST_PATH`, `SERIES_DEST_PATH`.
+  - Optional: `LLM_MODEL`, `LLM_BASE_URL`, `JELLYFIN_URL`, `JELLYFIN_API_KEY`, `LOG_LEVEL`.
 - **Build Process**: `docker compose build` followed by `docker compose up`.
 - **Execution**: Run as a module: `python -m src.main`.
 
