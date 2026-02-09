@@ -1,7 +1,7 @@
 services:
-  metadata-fetcher:
+  jellyfin-ai-manager:
     build: .
-    container_name: metadata-fetcher
+    container_name: jellyfin-ai-manager
     env_file:
       - .env
     user: "${UID}:${GID}"
