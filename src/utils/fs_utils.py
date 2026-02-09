@@ -77,7 +77,7 @@ def get_processed_files(movies_path: str, series_path: str) -> set[str]:
     Returns a set of absolute paths to source files that are already processed.
     """
     processed_sources = set()
-    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v')
+    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')
     
     for dest_root in [movies_path, series_path]:
         if not dest_root or not os.path.exists(dest_root):

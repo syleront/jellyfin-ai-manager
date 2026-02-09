@@ -8,7 +8,7 @@ def cleanup_broken_links(movies_path: str, series_path: str, mixed_path: str = N
     Scans destination folders for broken symlinks and removes them along with their .nfo files.
     Also cleans up orphaned entries in .failed lists.
     """
-    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v')
+    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')
     removed_count = 0
     
     # 1. Cleanup broken symlinks and NFOs in destination folders
@@ -73,7 +73,7 @@ def cleanup_broken_links(movies_path: str, series_path: str, mixed_path: str = N
 
 def scan_mixed_folder_batches(path: str, skip_files: set[str]):
     """Recursively scans for video files and groups them by folder, filtering out skipped ones and respecting .ignore files."""
-    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v')
+    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')
     for root, dirs, files in os.walk(path):
         # If .ignore file is present, skip this directory and all its subdirectories
         if '.ignore' in files:
@@ -88,10 +88,37 @@ def scan_mixed_folder_batches(path: str, skip_files: set[str]):
             continue
 
         batch = []
-        for file in files:
-            if file.lower().endswith(video_extensions):
-                full_path = os.path.abspath(os.path.join(root, file))
-                if full_path not in skip_files:
-                    batch.append(full_path)
+        
+        # Check if this is a BD folder (contains BDMV)
+        if 'BDMV' in dirs:
+            # Find the largest .m2ts file in the BDMV/STREAM directory
+            stream_dir = os.path.join(root, 'BDMV', 'STREAM')
+            if os.path.exists(stream_dir):
+                largest_file = None
+                max_size = -1
+                for f in os.listdir(stream_dir):
+                    if f.lower().endswith('.m2ts'):
+                        f_path = os.path.join(stream_dir, f)
+                        f_size = os.path.getsize(f_path)
+                        if f_size > max_size:
+                            max_size = f_size
+                            largest_file = f_path
+                
+                if largest_file:
+                    full_path = os.path.abspath(largest_file)
+                    if full_path not in skip_files:
+                        # For BD folders, we use the folder name for identification
+                        # but we yield the largest m2ts file as the file to process
+                        batch.append(full_path)
+            
+            # Don't recurse into BDMV or other subdirs of a BD folder
+            dirs[:] = []
+        else:
+            for file in files:
+                if file.lower().endswith(video_extensions):
+                    full_path = os.path.abspath(os.path.join(root, file))
+                    if full_path not in skip_files:
+                        batch.append(full_path)
+        
         if batch:
             yield root, batch
