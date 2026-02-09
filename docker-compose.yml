@@ -1,0 +1,12 @@
+services:
+  metadata-fetcher:
+    build: .
+    container_name: metadata-fetcher
+    env_file:
+      - .env
+    user: "${UID}:${GID}"
+    volumes:
+      - ${MIXED_PATH_HOST}:${MIXED_PATH}:ro
+      - ${MOVIES_DEST_PATH_HOST}:${MOVIES_DEST_PATH}
+      - ${SERIES_DEST_PATH_HOST}:${SERIES_DEST_PATH}
+    restart: "no" # to prevent endless consumption of tokens if a bug suddenly appears
