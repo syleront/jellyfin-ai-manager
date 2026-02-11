@@ -104,3 +104,156 @@ def get_processed_files(movies_path: str, series_path: str) -> set[str]:
                             except Exception:
                                 pass
     return processed_sources
+
+def find_external_audio_and_subtitles(video_file_path: str) -> dict:
+    """
+    Find external audio and subtitle files for a given video file.
+    Searches in sibling directories for files matching the video filename.
+    
+    Returns a dict with:
+    {
+        'audio': [(src_path, suggested_dest_name), ...],
+        'subtitles': [(src_path, suggested_dest_name), ...]
+    }
+    """
+    audio_extensions = ('.mka', '.mp3', '.aac', '.ac3', '.dts', '.flac')
+    subtitle_extensions = ('.ass', '.srt', '.ssa', '.sub', '.vtt')
+    
+    result = {
+        'audio': [],
+        'subtitles': []
+    }
+    
+    video_dir = os.path.dirname(video_file_path)
+    video_basename = os.path.basename(video_file_path)
+    video_name_no_ext = os.path.splitext(video_basename)[0]
+    
+    logger.debug(f"Searching for external media for: {video_basename}")
+    
+    # Search parent directory and its subdirectories
+    parent_dir = os.path.dirname(video_dir)
+    if not os.path.exists(parent_dir):
+        parent_dir = video_dir
+    
+    # Search all directories at the same level as the video file or in subdirectories
+    search_dirs = []
+    
+    # 1. Search in the same directory as the video file
+    search_dirs.append(video_dir)
+    
+    # 2. If video is in a subdirectory, search parent's children (sibling directories)
+    if parent_dir != video_dir:
+        try:
+            for item in os.listdir(parent_dir):
+                item_path = os.path.join(parent_dir, item)
+                if os.path.isdir(item_path) and item_path != video_dir:
+                    search_dirs.append(item_path)
+        except Exception as e:
+            logger.error(f"Error listing parent directory {parent_dir}: {e}")
+    
+    # 3. Also search subdirectories of the video directory
+    try:
+        for item in os.listdir(video_dir):
+            item_path = os.path.join(video_dir, item)
+            if os.path.isdir(item_path):
+                search_dirs.append(item_path)
+    except Exception as e:
+        logger.error(f"Error listing video directory {video_dir}: {e}")
+    
+    if search_dirs:
+        logger.debug(f"Searching {len(search_dirs)} directories for external media")
+    
+    # Search for matching files
+    seen_files = set()  # Track files to avoid duplicates
+    for search_dir in search_dirs:
+        try:
+            # Walk through subdirectories as well
+            for root, _, files in os.walk(search_dir):
+                for file in files:
+                    file_lower = file.lower()
+                    file_path = os.path.join(root, file)
+                    
+                    # Skip if already seen
+                    if file_path in seen_files:
+                        continue
+                    
+                    # Check if the file name starts with the video name
+                    if file.startswith(video_name_no_ext):
+                        if file_lower.endswith(audio_extensions):
+                            # Use the original filename for the hardlink
+                            result['audio'].append((file_path, file))
+                            seen_files.add(file_path)
+                            logger.info(f"Found external audio: {file_path}")
+                        elif file_lower.endswith(subtitle_extensions):
+                            result['subtitles'].append((file_path, file))
+                            seen_files.add(file_path)
+                            logger.info(f"Found external subtitle: {file_path}")
+        except Exception as e:
+            logger.error(f"Error searching directory {search_dir}: {e}")
+    
+    return result
+
+def link_external_media(video_src_path: str, video_dest_path: str, external_files: dict) -> int:
+    """
+    Create relative symlinks for external audio and subtitle files next to the video file.
+    Renames external media files to match the destination video filename while preserving suffixes.
+    
+    Example:
+        Source video: "[ANK-Raws] Haibane Renmei - 01.mkv"
+        Dest video: "Haibane Renmei - S1E1.mkv"
+        Source audio: "[ANK-Raws] Haibane Renmei - 01.Reanimedia.mka"
+        Dest audio: "Haibane Renmei - S1E1.Reanimedia.mka"
+    
+    Args:
+        video_src_path: The original source path of the video file
+        video_dest_path: The destination path of the video file (symlink)
+        external_files: Dict returned by find_external_audio_and_subtitles()
+    
+    Returns:
+        Number of successfully created symlinks
+    """
+    linked_count = 0
+    dest_dir = os.path.dirname(video_dest_path)
+    
+    video_src_name_no_ext = os.path.splitext(os.path.basename(video_src_path))[0]
+    video_dest_name_no_ext = os.path.splitext(os.path.basename(video_dest_path))[0]
+    
+    # Link audio files
+    for src_path, suggested_name in external_files.get('audio', []):
+        suggested_name_no_ext = os.path.splitext(suggested_name)[0]
+        ext = os.path.splitext(suggested_name)[1]
+        
+        # Extract suffix (language tag, commentary, etc.)
+        # E.g., "[Original] Movie - 01.Reanimedia" with original name "[Original] Movie - 01"
+        # -> suffix is ".Reanimedia"
+        if suggested_name_no_ext.startswith(video_src_name_no_ext):
+            suffix = suggested_name_no_ext[len(video_src_name_no_ext):]
+        else:
+            suffix = ""
+        
+        # New name: video_dest_name + suffix + extension
+        new_name = video_dest_name_no_ext + suffix + ext
+        dest_path = os.path.join(dest_dir, new_name)
+        
+        if create_relative_symlink(src_path, dest_path):
+            linked_count += 1
+    
+    # Link subtitle files
+    for src_path, suggested_name in external_files.get('subtitles', []):
+        suggested_name_no_ext = os.path.splitext(suggested_name)[0]
+        ext = os.path.splitext(suggested_name)[1]
+        
+        # Extract suffix
+        if suggested_name_no_ext.startswith(video_src_name_no_ext):
+            suffix = suggested_name_no_ext[len(video_src_name_no_ext):]
+        else:
+            suffix = ""
+        
+        # New name
+        new_name = video_dest_name_no_ext + suffix + ext
+        dest_path = os.path.join(dest_dir, new_name)
+        
+        if create_relative_symlink(src_path, dest_path):
+            linked_count += 1
+    
+    return linked_count

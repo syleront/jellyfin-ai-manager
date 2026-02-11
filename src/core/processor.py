@@ -2,7 +2,13 @@ import os
 import logging
 from src.core.config import Config
 from src.clients.tmdb_client import TMDBClient
-from src.utils.fs_utils import escape_filename, create_relative_symlink, mark_as_failed
+from src.utils.fs_utils import (
+    escape_filename, 
+    create_relative_symlink, 
+    mark_as_failed,
+    find_external_audio_and_subtitles,
+    link_external_media
+)
 from src.utils.nfo_generator import generate_movie_nfo, generate_series_nfo, generate_episode_nfo
 
 logger = logging.getLogger(__name__)
@@ -41,6 +47,15 @@ class MediaProcessor:
             # 3. Generate NFO
             nfo_path = os.path.splitext(dest_file)[0] + ".nfo"
             generate_movie_nfo(movie_data, nfo_path)
+            
+            # 4. Link external audio and subtitles
+            external_files = find_external_audio_and_subtitles(file_path)
+            if external_files['audio'] or external_files['subtitles']:
+                linked_count = link_external_media(file_path, dest_file, external_files)
+                logger.info(f"Linked {linked_count} external media files for {title}")
+            else:
+                logger.debug(f"No external media found for {title}")
+            
             return True
         return False
 
@@ -96,6 +111,15 @@ class MediaProcessor:
             ep_data = self.tmdb.get_episode_details(series_tmdb_id, season_num, episode_num)
             if ep_data:
                 generate_episode_nfo(ep_data, ep_nfo_path)
+                
+                # 4. Link external audio and subtitles
+                external_files = find_external_audio_and_subtitles(file_path)
+                if external_files['audio'] or external_files['subtitles']:
+                    linked_count = link_external_media(file_path, dest_file, external_files)
+                    logger.info(f"Linked {linked_count} external media files for {series_title} S{season_num}E{episode_num}")
+                else:
+                    logger.debug(f"No external media found for {series_title} S{season_num}E{episode_num}")
+                
                 return True
             else:
                 logger.warning(f"Episode details not found on TMDB: {series_title} S{season_num}E{episode_num}")

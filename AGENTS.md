@@ -38,11 +38,30 @@ This file defines the rules and conventions for AI agents and developers working
 - **Error Handling**: Use `try-except` blocks around I/O and API calls. Mark failed items in a `.failed` file within destination directories to avoid re-processing.
 
 ## Testing
-- **Current State**: No formal testing framework (pytest/unittest) is currently implemented.
-- **Expectations**:
-  - When adding new features, prioritize manual verification of symlink creation and NFO validity.
-  - If a testing framework is added, it should be `pytest`.
-  - Add tests for utility functions like `escape_filename` or XML generation logic.
+- **Current State**: Comprehensive test suite in `tests/` directory with integration and end-to-end tests.
+- **Test Files**:
+  - `tests/test_external_media.py`: External audio/subtitle detection and renaming with suffix preservation.
+  - `tests/test_watcher.py`: File system event detection for all supported formats (6 video, 6 audio, 5 subtitle).
+  - `tests/test_external_media_integration.py`: Full integration - initial scan, add/delete, cleanup, multi-video scenarios.
+  - `tests/test_watcher_external_media.py`: Real watcher behavior simulating external media addition and deletion events.
+  - `tests/test_initial_scan_external_media.py`: Re-linking of external media during startup for already-processed files.
+  - `tests/test_real_world_haibane.py`: Real-world Haibane Renmei structure (3 episodes, audio, subtitle folders).
+  - `tests/test_complete_lifecycle.py`: End-to-end lifecycle test (download → initial scan → offline period → user adds subtitles → restart → re-link).
+- **Coverage**: Relative symlinks, suffix preservation, correct multi-video matching, broken link cleanup, orphaned file removal.
+- **Expectations**: New features should include corresponding tests. All 17 media formats supported.
+
+## External Audio & Subtitle Support
+- **Feature**: System automatically detects and symlinks external audio/subtitle files from mixed folder and its subdirectories.
+- **Search Strategy**: Searches in video directory, sibling directories (parent's children), and subdirectories up to 5 levels deep for nested structures like `Series/Russian Subtitles [Group]/Inscriptions [ass]/`
+- **Matching Logic**: External media filename must START with video filename (without extension). Suffixes preserved: `.Reanimedia`, `_inscriptions`, `.rus`, etc.
+- **Key Functions**:
+  - `find_external_audio_and_subtitles(video_src_path)` in `fs_utils.py`: Recursively searches for matching external media. Returns dict with `'audio'` and `'subtitles'` keys. Deduplicates results.
+  - `link_external_media(video_src_path, video_dest_path, external_files)` in `fs_utils.py`: Creates relative symlinks with automatic filename renaming preserving suffixes.
+  - `create_relative_symlink(src, dst)` in `fs_utils.py`: Creates portable relative symlinks (works when moved across mount points).
+- **Processing Stages**:
+  - **Initial Scan**: On startup, re-links external media for already-processed files (those with NFO). Catches external media added while app was offline.
+  - **Watcher Events**: When external media is created, finds matching video and re-links all external media. When deleted, removes broken symlinks via cleanup.
+- **Cleanup**: Two-stage process - first collects valid video files, then removes broken symlinks (any type) and orphaned external media files.
 
 ## Security
 - **Secrets**:

@@ -20,6 +20,8 @@ def setup_logging(level_str: str):
 
 def run_initial_scan(config, llm, tmdb, jellyfin, processor, logger):
     processed_count = 0
+    external_media_count = 0
+    relinked_count = 0
     
     logger.info("Cleaning up broken links and orphaned markers...")
     removed_links = cleanup_broken_links(config.movies_dest_path, config.series_dest_path, config.mixed_path)
@@ -29,6 +31,39 @@ def run_initial_scan(config, llm, tmdb, jellyfin, processor, logger):
     logger.info("Scanning for already processed files...")
     processed_files = get_processed_files(config.movies_dest_path, config.series_dest_path)
     logger.info(f"Found {len(processed_files)} already processed files.")
+    
+    # Re-link external media for already processed files
+    # (in case user added audio/subtitle files while app was offline)
+    if processed_files:
+        logger.info("Re-linking external media for already processed files...")
+        from src.utils.fs_utils import find_external_audio_and_subtitles, link_external_media
+        
+        for dest_root in [config.movies_dest_path, config.series_dest_path]:
+            if not dest_root or not os.path.exists(dest_root):
+                continue
+            
+            video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')
+            for root, dirs, files in os.walk(dest_root):
+                for file in files:
+                    if file.lower().endswith(video_extensions):
+                        dest_video_path = os.path.join(root, file)
+                        if os.path.islink(dest_video_path):
+                            # Resolve symlink to get source path
+                            link_target = os.readlink(dest_video_path)
+                            if not os.path.isabs(link_target):
+                                link_target = os.path.normpath(os.path.join(root, link_target))
+                            
+                            src_video_path = os.path.abspath(link_target)
+                            if os.path.exists(src_video_path):
+                                # Find and link external media
+                                external_files = find_external_audio_and_subtitles(src_video_path)
+                                if external_files['audio'] or external_files['subtitles']:
+                                    linked = link_external_media(src_video_path, dest_video_path, external_files)
+                                    if linked > 0:
+                                        relinked_count += linked
+        
+        if relinked_count > 0:
+            logger.info(f"Re-linked {relinked_count} external media file(s) for already processed videos")
 
     logger.info("Scanning for failed files...")
     failed_files = get_failed_files(config.movies_dest_path, config.series_dest_path, config.mixed_path)
