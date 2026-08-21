@@ -11,7 +11,7 @@ from src.clients.tmdb_client import TMDBClient
 from src.clients.jellyfin_client import JellyfinClient
 from src.core.processor import MediaProcessor
 from src.utils.scanner import cleanup_broken_links, cleanup_ignored_directory
-from src.utils.fs_utils import mark_as_failed
+from src.utils.fs_utils import mark_as_failed, get_existing_series_folders
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +253,8 @@ class MediaWatcherHandler(FileSystemEventHandler):
         if rel_folder == ".":
             rel_folder = ""
 
-        batch_info = self.llm.extract_media_info_batch(filenames, folder_context=rel_folder)
+        existing_series_folders = get_existing_series_folders(self.config.series_dest_path)
+        batch_info = self.llm.extract_media_info_batch(filenames, folder_context=rel_folder, existing_series_folders=existing_series_folders)
 
         if not batch_info or len(batch_info) != len(valid_files):
             logger.warning(f"Could not identify batch in: {folder_path}")

@@ -4,7 +4,7 @@ from src.core.config import load_config
 from src.clients.llm_client import LLMClient
 from src.clients.tmdb_client import TMDBClient
 from src.clients.jellyfin_client import JellyfinClient
-from src.utils.fs_utils import get_failed_files, get_processed_files, mark_as_failed
+from src.utils.fs_utils import get_failed_files, get_processed_files, mark_as_failed, get_existing_series_folders
 from src.utils.scanner import cleanup_broken_links, scan_mixed_folder_batches
 import time
 from src.core.processor import MediaProcessor
@@ -70,9 +70,9 @@ def run_initial_scan(config, llm, tmdb, jellyfin, processor, logger):
     logger.info(f"Found {len(failed_files)} failed files.")
     
     skip_files = processed_files.union(failed_files)
+    existing_series_folders = get_existing_series_folders(config.series_dest_path)
 
     logger.info(f"Starting initial scan in: {config.mixed_path}")
-    
     for parent_dir, file_paths in scan_mixed_folder_batches(config.mixed_path, skip_files):
         logger.info(f"Processing folder: {parent_dir} ({len(file_paths)} files)")
         
@@ -81,7 +81,7 @@ def run_initial_scan(config, llm, tmdb, jellyfin, processor, logger):
         if rel_folder == ".":
             rel_folder = ""
             
-        batch_info = llm.extract_media_info_batch(filenames, folder_context=rel_folder)
+        batch_info = llm.extract_media_info_batch(filenames, folder_context=rel_folder, existing_series_folders=existing_series_folders)
         
         if not batch_info or len(batch_info) != len(file_paths):
             logger.warning(f"Could not identify files in: {parent_dir}")

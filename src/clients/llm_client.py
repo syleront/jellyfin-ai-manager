@@ -12,7 +12,7 @@ class LLMClient:
         )
         self.model = model
 
-    def extract_media_info_batch(self, filenames: list[str], folder_context: str = None):
+    def extract_media_info_batch(self, filenames: list[str], folder_context: str = None, existing_series_folders: list[str] = None):
         """
         Uses LLM to extract media info for a batch of filenames from the same folder.
         Returns a list of dictionaries with the extracted info, matching the input order.
@@ -22,7 +22,13 @@ class LLMClient:
 
         filenames_str = "\n".join([f"{i+1}. {f}" for i, f in enumerate(filenames)])
         
-        context_str = f"Folder context: {folder_context}\n" if folder_context else ""
+        context_parts = []
+        if folder_context:
+            context_parts.append(f"Folder context: {folder_context}")
+        if existing_series_folders:
+            folders_str = "\n".join([f"- {f}" for f in existing_series_folders])
+            context_parts.append(f"Existing series folders:\n{folders_str}")
+        context_str = "\n".join(context_parts) + "\n" if context_parts else ""
         
         prompt = f"""Extract media information from the following list of filenames.
 These files are from the same folder, so they might share patterns (e.g., same series).
@@ -39,9 +45,11 @@ For each file, determine if it's a "movie" or a "series".
 - For multi-season files, return "season" as a string.
 
 Search for the title as it appears on themoviedb.org.
+Always return the "title" in English, regardless of the origin of the series or film.
+
+If the series matches one of the existing series folders, return the exact "title" and "year" from that folder, so that new episodes are placed into the same existing folder.
 
 Respond ONLY with a JSON array of objects, one for each filename in the exact same order.
-If the series or film is russian origin - return the "title" in russian language.
 
 Example Output:
 [

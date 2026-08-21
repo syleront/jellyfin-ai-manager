@@ -105,6 +105,13 @@ def get_processed_files(movies_path: str, series_path: str) -> set[str]:
                                 pass
     return processed_sources
 
+def get_existing_series_folders(series_path: str) -> list[str]:
+    """Returns the names of existing series folders in the series destination path."""
+    if not series_path or not os.path.exists(series_path):
+        return []
+    return sorted(d for d in os.listdir(series_path)
+                  if os.path.isdir(os.path.join(series_path, d)))
+
 def find_external_audio_and_subtitles(video_file_path: str) -> dict:
     """
     Find external audio and subtitle files for a given video file.
