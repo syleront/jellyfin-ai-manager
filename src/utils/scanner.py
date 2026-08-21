@@ -114,6 +114,104 @@ def cleanup_broken_links(movies_path: str, series_path: str, mixed_path: str = N
 
     return removed_count
 
+def cleanup_ignored_directory(ignored_dir: str, movies_path: str, series_path: str) -> int:
+    """
+    Removes all symlinks in destination folders that point to files within ignored_dir
+    (or any of its subdirectories). Also removes associated .nfo files, orphaned external
+    media, and empty directories left behind.
+    Returns the count of removed items.
+    """
+    video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')
+    audio_extensions = ('.mka', '.mp3', '.aac', '.ac3', '.dts', '.flac')
+    subtitle_extensions = ('.ass', '.srt', '.ssa', '.sub', '.vtt')
+    extra_extensions = audio_extensions + subtitle_extensions
+    removed_count = 0
+
+    ignored_dir_abs = os.path.abspath(ignored_dir)
+
+    for dest_root in [movies_path, series_path]:
+        if not dest_root or not os.path.exists(dest_root):
+            continue
+
+        # Pass 1: collect video base names that will survive (not being removed)
+        # We need this to clean up orphaned external media afterwards.
+        # Do a dry-run first to know which videos are going away.
+        videos_to_remove = set()  # dest paths of video symlinks being removed
+
+        for root, dirs, files in os.walk(dest_root):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if not file.lower().endswith(video_extensions):
+                    continue
+                if not os.path.islink(file_path):
+                    continue
+                try:
+                    link_target = os.readlink(file_path)
+                    if not os.path.isabs(link_target):
+                        link_target = os.path.normpath(os.path.join(root, link_target))
+                    target_abs = os.path.abspath(link_target)
+                    if target_abs.startswith(ignored_dir_abs + os.sep) or target_abs == ignored_dir_abs:
+                        videos_to_remove.add(file_path)
+                except Exception:
+                    pass
+
+        removed_video_bases = {os.path.splitext(os.path.basename(p))[0] for p in videos_to_remove}
+
+        # Pass 2: remove video symlinks, their NFOs, and associated external media
+        for video_path in videos_to_remove:
+            root = os.path.dirname(video_path)
+            video_base = os.path.splitext(os.path.basename(video_path))[0]
+
+            # Remove the video symlink
+            try:
+                os.remove(video_path)
+                removed_count += 1
+                logger.info(f"Removed ignored symlink: {video_path}")
+            except Exception as e:
+                logger.error(f"Error removing ignored symlink {video_path}: {e}")
+
+            # Remove corresponding .nfo
+            nfo_path = os.path.splitext(video_path)[0] + ".nfo"
+            if os.path.exists(nfo_path):
+                try:
+                    os.remove(nfo_path)
+                    removed_count += 1
+                    logger.info(f"Removed NFO: {nfo_path}")
+                except Exception as e:
+                    logger.error(f"Error removing NFO {nfo_path}: {e}")
+
+            # Remove associated external media (audio/subtitle) in the same directory
+            try:
+                for sibling in os.listdir(root):
+                    if not sibling.lower().endswith(extra_extensions):
+                        continue
+                    sibling_base = os.path.splitext(sibling)[0]
+                    if sibling_base == video_base or sibling_base.startswith(video_base):
+                        sibling_path = os.path.join(root, sibling)
+                        try:
+                            os.remove(sibling_path)
+                            removed_count += 1
+                            logger.info(f"Removed external media: {sibling_path}")
+                        except Exception as e:
+                            logger.error(f"Error removing external media {sibling_path}: {e}")
+            except Exception as e:
+                logger.error(f"Error listing directory {root}: {e}")
+
+        # Pass 3: remove empty directories bottom-up
+        if videos_to_remove:
+            for root, dirs, files in os.walk(dest_root, topdown=False):
+                if root == dest_root:
+                    continue
+                try:
+                    if not os.listdir(root):
+                        os.rmdir(root)
+                        logger.info(f"Removed empty directory: {root}")
+                except Exception:
+                    pass
+
+    return removed_count
+
+
 def scan_mixed_folder_batches(path: str, skip_files: set[str]):
     """Recursively scans for video files and groups them by folder, filtering out skipped ones and respecting .ignore files."""
     video_extensions = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.m2ts')

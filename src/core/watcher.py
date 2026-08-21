@@ -10,7 +10,7 @@ from src.clients.llm_client import LLMClient
 from src.clients.tmdb_client import TMDBClient
 from src.clients.jellyfin_client import JellyfinClient
 from src.core.processor import MediaProcessor
-from src.utils.scanner import cleanup_broken_links
+from src.utils.scanner import cleanup_broken_links, cleanup_ignored_directory
 from src.utils.fs_utils import mark_as_failed
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class MediaWatcherHandler(FileSystemEventHandler):
         self.external_media_extensions = self.audio_extensions + self.subtitle_extensions
         self.event_queue = queue.Queue()
         self.is_initial_scan_complete = False
-        
+
         # Batching logic
         self.batch_lock = threading.Lock()
         self.pending_batches = {} # folder_path -> { 'files': set(), 'timer': Timer }
@@ -37,7 +37,11 @@ class MediaWatcherHandler(FileSystemEventHandler):
         if event.is_directory:
             return
         file_lower = event.src_path.lower()
-        if file_lower.endswith(self.video_extensions):
+        if os.path.basename(event.src_path) == '.ignore':
+            ignored_dir = os.path.dirname(event.src_path)
+            logger.info(f"Event: .ignore created in -> {ignored_dir}")
+            self.event_queue.put(('ignore_created', ignored_dir))
+        elif file_lower.endswith(self.video_extensions):
             logger.info(f"Event: Created -> {event.src_path}")
             self._queue_for_batching(event.src_path)
         elif file_lower.endswith(self.external_media_extensions):
@@ -110,12 +114,30 @@ class MediaWatcherHandler(FileSystemEventHandler):
                     self._handle_deletion(data)
                 elif event_type == 'external_media_added':
                     self._handle_external_media_added(data)
+                elif event_type == 'ignore_created':
+                    self._handle_ignore_created(data)
                 
                 self.event_queue.task_done()
             except queue.Empty:
                 continue
             except Exception as e:
                 logger.error(f"Error processing watcher event: {e}")
+
+    def _handle_ignore_created(self, ignored_dir: str):
+        logger.info(f"Handling .ignore creation in: {ignored_dir}")
+        removed = cleanup_ignored_directory(
+            ignored_dir,
+            self.config.movies_dest_path,
+            self.config.series_dest_path,
+        )
+        if removed > 0:
+            logger.info(f"Removed {removed} item(s) for ignored directory: {ignored_dir}")
+            if self.config.jellyfin_movies_library_id:
+                self.jellyfin.refresh_library(self.config.jellyfin_movies_library_id)
+            if self.config.jellyfin_series_library_id:
+                self.jellyfin.refresh_library(self.config.jellyfin_series_library_id)
+        else:
+            logger.info(f"No items found to remove for ignored directory: {ignored_dir}")
 
     def _handle_deletion(self, file_path: str):
         logger.info(f"Handling deletion for: {file_path}")
